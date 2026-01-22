@@ -147,4 +147,32 @@ if template_path and data_to_process:
             st.error(f"制作失败：{e}")
 else:
     st.info("等待录入数据并确认模板...")
+# --- 底部技术栈与版权信息 ---
+st.markdown("---") # 添加一条水平分割线，使视觉更有层次
+
+footer_content = """
+<div class="footer-container" style="padding: 20px 0; margin-top: 50px;">
+    <div class="footer-tech-stack" style="text-align: center; margin-bottom: 12px; display: flex; justify-content: center; align-items: center; gap: 15px;">
+        <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/github/github-original.svg" alt="GitHub" width="24" style="opacity: 0.7; filter: grayscale(100%);">
+        <img src="https://www.vectorlogo.zone/logos/cloudflare/cloudflare-ar21.svg" alt="Cloudflare" width="60" style="opacity: 0.7;">
+        <img src="https://www.vectorlogo.zone/logos/vercel/vercel-ar21.svg" alt="Vercel" width="60" style="opacity: 0.7;">
+        <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/vuejs/vuejs-original.svg" alt="Vue" width="24" style="opacity: 0.7;">
+        <img src="https://www.vectorlogo.zone/logos/tailwindcss/tailwindcss-icon.svg" alt="Tailwind" width="24" style="opacity: 0.7;">
+    </div>
+    
+    <div class="footer-copyright" style="text-align: center; font-size: 13px; color: #888; font-family: sans-serif;">
+        <p style="margin: 5px 0;">粤ICP备XXXXXXXX号-1</p>
+        <p style="margin: 0;">© 2026 涂嘉辰. All rights reserved.</p>
+    </div>
+</div>
+
+<style>
+    /* 适配 Streamlit 页面，确保底部留白 */
+    .main .block-container {
+        padding-bottom: 100px;
+    }
+</style>
+"""
+
+st.markdown(footer_content, unsafe_allow_html=True)
 
