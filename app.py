@@ -7,181 +7,144 @@ from docx import Document
 from docxcompose.composer import Composer
 from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
-import streamlit.components.v1 as components
 
-# --- 1. 注入 Silk 着色器背景（基于您提供的 Shader 逻辑） ---
-def inject_silk_shader_bg():
-    # 我们将 React 逻辑转译为原生 Three.js 脚本，直接嵌入 HTML
-    silk_html = """
-    <div id="silk-bg" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1;"></div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-        const vertexShader = `
-            varying vec2 vUv;
-            void main() {
-                vUv = uv;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-        `;
-
-        const fragmentShader = `
-            varying vec2 vUv;
-            uniform float uTime;
-            uniform vec3  uColor;
-            uniform float uSpeed;
-            uniform float uScale;
-            uniform float uNoiseIntensity;
-
-            const float e = 2.71828182845904523536;
-
-            float noise(vec2 texCoord) {
-                vec2 r = (e * sin(e * texCoord));
-                return fract(r.x * r.y * (1.0 + texCoord.x));
-            }
-
-            void main() {
-                float rnd = noise(gl_FragCoord.xy);
-                vec2 uv = vUv * uScale;
-                float tOffset = uSpeed * uTime;
-                uv.y += 0.03 * sin(8.0 * uv.x - tOffset);
-
-                float pattern = 0.6 + 0.4 * sin(5.0 * (uv.x + uv.y + 
-                                cos(3.0 * uv.x + 5.0 * uv.y) + 0.02 * tOffset) + 
-                                sin(20.0 * (uv.x + uv.y - 0.1 * tOffset)));
-
-                vec3 col = uColor * pattern - rnd / 15.0 * uNoiseIntensity;
-                gl_FragColor = vec4(col, 1.0);
-            }
-        `;
-
-        const container = document.getElementById('silk-bg');
-        const scene = new THREE.Scene();
-        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        container.appendChild(renderer.domElement);
-
-        const uniforms = {
-            uTime: { value: 0 },
-            uColor: { value: new THREE.Color("#7B7481") }, // 使用您代码中的颜色
-            uSpeed: { value: 4.3 },
-            uScale: { value: 0.5 },
-            uNoiseIntensity: { value: 1.5 }
-        };
-
-        const geometry = new THREE.PlaneGeometry(2, 2);
-        const material = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader });
-        const mesh = new THREE.Mesh(geometry, material);
-        scene.add(mesh);
-
-        function animate(time) {
-            uniforms.uTime.value = time * 0.0005; // 对应 React 中的 delta 逻辑
-            renderer.render(scene, camera);
-            requestAnimationFrame(animate);
-        }
-
-        window.onresize = () => {
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        };
-
-        requestAnimationFrame(animate);
-    </script>
-    <style>
-        /* 强制 Streamlit 背景透明 */
-        .stApp { background: transparent !important; }
-        
-        /* 步骤框去白、磨砂化 */
-        div[data-testid="stVerticalBlock"] > div {
-            background-color: transparent !important;
-        }
-        
-        h3 {
-            background: rgba(255, 255, 255, 0.15) !important;
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            padding: 10px 15px !important;
-            border-radius: 12px !important;
-            color: white !important;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        h1 { color: white !important; text-shadow: 2px 2px 10px rgba(0,0,0,0.2); }
-    </style>
-    """
-    components.html(silk_html, height=0)
-
-# --- 2. 核心功能代码 ---
+# 页面配置
 st.set_page_config(page_title="证书智能制作工具", layout="centered")
-inject_silk_shader_bg()
 
 st.title("🎓 内审员证书智能制作工具")
 
-# 第一步：模式选择
+# --- 第一步：选择录入模式 ---
 st.markdown("### 第一步：选择录入模式")
-mode = st.radio("方式：", ["Excel 上传", "网页填写"], index=0, horizontal=True, label_visibility="collapsed")
+mode = st.radio(
+    "选择方式：", 
+    ["Excel 文件上传", "网页表格填写 (支持粘贴)"], 
+    index=0, 
+    horizontal=True
+)
 
 DEFAULT_TEMPLATE = "内审员证书.docx"
 data_to_process = []
 
-# 第二步：准备数据
-st.markdown("### 第二步：录入学员信息")
+# --- 第二步：准备数据 ---
+st.markdown("---")
+st.markdown("### 第二步：填写或上传信息")
 
-if mode == "网页填写":
+if mode == "网页表格填写 (支持粘贴)":
+    st.info("💡 提示：点击左上角第一个单元格并按下 Ctrl+V 即可粘贴 Excel 数据。")
     init_df = pd.DataFrame({
-        "序号": range(1, 51),
-        "证书编号": [None]*50, "姓名": [None]*50, "身份证号": [None]*50, "培训日期": [None]*50, "标准号": [None]*50
+        "序号": [i for i in range(1, 101)],
+        "证书编号": [None] * 100, "姓名": [None] * 100, "身份证号": [None] * 100, "培训日期": [None] * 100, "标准号": [None] * 100,
     })
-    edited_df = st.data_editor(init_df, use_container_width=True, hide_index=True)
-    temp_df = edited_df.drop(columns=["序号"]).dropna(how='all')
-    data_to_process = [row for row in temp_df.to_dict('records') if row.get('姓名')]
-else:
-    c1, c2 = st.columns([2, 3])
-    with c1:
-        # 带有黄色示例行的模板生成
-        df_ex = pd.DataFrame({"证书编号":["编号(示例)"], "姓名":["张三(示例)"], "身份证号":["123456..."], "培训日期":["2026-01"], "标准号":["ISO9001"]})
-        buf = io.BytesIO()
-        with pd.ExcelWriter(buf, engine='openpyxl') as writer:
-            df_ex.to_excel(writer, index=False)
-            ws = writer.sheets['Sheet1']
-            for cell in ws[2]: cell.fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-        st.download_button("📥 下载带示例模板", data=buf.getvalue(), file_name="学员模板.xlsx")
-    with c2:
-        up = st.file_uploader("上传 Excel", type=["xlsx"], label_visibility="collapsed")
-        if up:
-            df = pd.read_excel(up, dtype=str).fillna("")
-            data_to_process = [row for row in df.to_dict('records') if "示例" not in str(row.get('姓名'))]
+    edited_df = st.data_editor(
+        init_df, num_rows="fixed", use_container_width=True, hide_index=True, height=380,
+        column_config={
+            "序号": st.column_config.NumberColumn("序号", width=40, disabled=True),
+            "证书编号": st.column_config.TextColumn("证书编号", width="small"),
+            "姓名": st.column_config.TextColumn("姓名", width="small"),
+            "身份证号": st.column_config.TextColumn("身份证号", width="medium"),
+            "培训日期": st.column_config.TextColumn("培训日期", width="medium"),
+            "标准号": st.column_config.TextColumn("标准号", width="large"),
+        }
+    )
+    temp_df = edited_df.drop(columns=["序号"])
+    data_to_process = temp_df.dropna(how='all').to_dict('records')
+    data_to_process = [{k: str(v).strip() for k, v in row.items() if v is not None} for row in data_to_process if any(row.values())]
 
-# 第三步：生成
-st.markdown("### 第三步：模板确认与生成")
-if os.path.exists(DEFAULT_TEMPLATE):
-    t_path = DEFAULT_TEMPLATE
-    st.success("✅ 已检测到默认 Word 模板")
 else:
-    t_path = st.file_uploader("请上传 Word 模板", type=["docx"])
-
-if t_path and data_to_process:
-    if st.button("🚀 批量生成汇总文档", use_container_width=True):
-        try:
-            master = None
-            bar = st.progress(0)
-            for i, row in enumerate(data_to_process):
-                doc = DocxTemplate(t_path)
-                doc.render(row)
-                tmp = io.BytesIO()
-                doc.save(tmp)
-                tmp.seek(0)
-                cur = Document(tmp)
-                if master is None:
-                    master = cur
-                    composer = Composer(master)
-                else:
-                    master.add_page_break()
-                    composer.append(cur)
-                bar.progress((i + 1) / len(data_to_process))
+    col1, col2 = st.columns([2, 3])
+    with col1:
+        # --- 创建带样式（标黄、列宽）的模板 ---
+        example_data = {
+            "证书编号": ["T-2025-001 (示例)"],
+            "姓名": ["张三 (示例)"],
+            "身份证号": ["440683199001010001"],
+            "培训日期": ["2025年9月3-5日"],
+            "标准号": ["ISO9001:2015、ISO22000:2018"]
+        }
+        df_ex = pd.DataFrame(example_data)
+        template_buffer = io.BytesIO()
+        
+        with pd.ExcelWriter(template_buffer, engine='openpyxl') as writer:
+            df_ex.to_excel(writer, index=False, sheet_name='Sheet1')
+            workbook = writer.book
+            worksheet = writer.sheets['Sheet1']
             
-            out = io.BytesIO()
-            master.save(out)
-            st.balloons()
-            st.download_button("🎁 下载汇总文档", out.getvalue(), "证书汇总.docx", use_container_width=True)
+            # 1. 自动调整列宽
+            for i, col in enumerate(df_ex.columns):
+                column_letter = get_column_letter(i + 1)
+                # 计算该列最大长度（表头 vs 内容）
+                max_length = max(df_ex[col].astype(str).map(len).max(), len(col)) + 5
+                worksheet.column_dimensions[column_letter].width = max_length
+            
+            # 2. 示例行（第二行，因为第一行是表头）标黄
+            yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+            for cell in worksheet[2]: # 指向第二行所有单元格
+                cell.fill = yellow_fill
+
+        st.download_button(
+            label="📥 下载标准模板 (含标黄示例)",
+            data=template_buffer.getvalue(),
+            file_name="学员信息上传模板.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        st.caption("注：系统会自动识别并跳过黄色示例行。")
+    
+    with col2:
+        uploaded_data = st.file_uploader("上传学员信息文件", type=["xlsx", "csv"], label_visibility="collapsed")
+
+    if uploaded_data:
+        df = pd.read_csv(uploaded_data, dtype=str).fillna("") if uploaded_data.name.endswith('.csv') else pd.read_excel(uploaded_data, dtype=str).fillna("")
+        # 核心逻辑：自动过滤掉带“示例”字样的行
+        data_to_process = [row for row in df.to_dict('records') if "示例" not in str(row.get('姓名', '')) and "示例" not in str(row.get('证书编号', ''))]
+        if data_to_process:
+            st.success(f"✅ 已成功加载 {len(data_to_process)} 条有效数据（已自动识别并剔除示例行）")
+
+# --- 第三步：模板确认与生成 ---
+st.markdown("---")
+st.markdown("### 第三步：模板确认与生成")
+
+if os.path.exists(DEFAULT_TEMPLATE):
+    template_option = st.radio("证书 Word 模板：", ["使用内置模板", "上传本地新模板"], horizontal=True)
+    template_path = DEFAULT_TEMPLATE if template_option == "使用内置模板" else st.file_uploader("请上传自定义 Word 模板", type=["docx"])
+else:
+    st.warning("⚠️ 仓库未发现默认模板。")
+    template_path = st.file_uploader("请上传 Word 模板", type=["docx"])
+
+# --- 执行生成 ---
+if template_path and data_to_process:
+    if st.button("🚀 开始批量制作合并文档", use_container_width=True):
+        try:
+            master_doc, progress_bar, valid_count = None, st.progress(0), 0
+            for i, row in enumerate(data_to_process):
+                name_val = str(row.get('姓名', '')).replace('nan', '').strip()
+                if not name_val: continue
+                
+                valid_count += 1
+                doc = DocxTemplate(template_path)
+                doc.render({
+                    'number': str(row.get('证书编号', '')).replace('nan', '').strip(),
+                    'name': name_val,
+                    'id_card': str(row.get('身份证号', '')).replace('nan', '').strip(),
+                    'date': str(row.get('培训日期', '')).replace('nan', '').strip(),
+                    'standards': str(row.get('标准号', '')).replace('nan', '').strip()
+                })
+                
+                t_io = io.BytesIO(); doc.save(t_io); t_io.seek(0)
+                cur_doc = Document(t_io)
+                if master_doc is None:
+                    master_doc = cur_doc
+                    composer = Composer(master_doc)
+                else:
+                    master_doc.add_page_break()
+                    composer.append(cur_doc)
+                progress_bar.progress((i + 1) / len(data_to_process))
+
+            if master_doc and valid_count > 0:
+                out_io = io.BytesIO(); master_doc.save(out_io); out_io.seek(0)
+                st.balloons()
+                st.download_button(label=f"🎁 制作完成({valid_count}份)！点击下载汇总文档", data=out_io.getvalue(), file_name="证书汇总导出.docx", use_container_width=True)
         except Exception as e:
-            st.error(f"出错啦: {e}")
+            st.error(f"制作失败：{e}")
+else:
+    st.info("等待录入数据并确认模板...")
+
