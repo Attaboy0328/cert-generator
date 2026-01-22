@@ -8,8 +8,100 @@ from docxcompose.composer import Composer
 from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 
-# 页面配置
+# --- 1. 注入丝绸 (Silk) 动态背景 ---
+def inject_silk_bg():
+    st.markdown("""
+    <div id="silk-container" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1;"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const vertexShader = `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `;
+
+        const fragmentShader = `
+            varying vec2 vUv;
+            uniform float uTime;
+            uniform vec3  uColor;
+            uniform float uSpeed;
+            uniform float uScale;
+            uniform float uNoiseIntensity;
+            const float e = 2.718281828459045;
+
+            float noise(vec2 texCoord) {
+                vec2 r = (e * sin(e * texCoord));
+                return fract(r.x * r.y * (1.0 + texCoord.x));
+            }
+
+            void main() {
+                float rnd = noise(gl_FragCoord.xy);
+                vec2 uv = vUv * uScale;
+                float tOffset = uSpeed * uTime;
+                uv.y += 0.03 * sin(8.0 * uv.x - tOffset);
+                float pattern = 0.6 + 0.4 * sin(5.0 * (uv.x + uv.y + 
+                                cos(3.0 * uv.x + 5.0 * uv.y) + 0.02 * tOffset) + 
+                                sin(20.0 * (uv.x + uv.y - 0.1 * tOffset)));
+                vec3 col = uColor * pattern - rnd / 15.0 * uNoiseIntensity;
+                gl_FragColor = vec4(col, 1.0);
+            }
+        `;
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('silk-container').appendChild(renderer.domElement);
+
+        const uniforms = {
+            uTime: { value: 0 },
+            uColor: { value: new THREE.Color("#7B7481") },
+            uSpeed: { value: 0.15 },
+            uScale: { value: 0.5 },
+            uNoiseIntensity: { value: 1.5 }
+        };
+
+        const geometry = new THREE.PlaneGeometry(2, 2);
+        const material = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader });
+        const mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+
+        function animate(time) {
+            uniforms.uTime.value = time * 0.001;
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+        
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        requestAnimationFrame(animate);
+    </script>
+    <style>
+        /* 让 Streamlit 的默认背景透明，透出丝绸 */
+        .stApp {
+            background: transparent !important;
+        }
+        /* 针对白色色块进行透明化处理，增加磨砂感 */
+        div[data-testid="stVerticalBlock"] > div {
+            background-color: rgba(255, 255, 255, 0.2) !important;
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            border-radius: 15px;
+        }
+        /* 标题颜色 */
+        h1, h3 {
+            color: white !important;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 2. 页面逻辑部分 (保持你刚才发的代码不变) ---
 st.set_page_config(page_title="证书智能制作工具", layout="centered")
+inject_silk_bg() # 注入背景
 
 st.title("🎓 内审员证书智能制作工具")
 
@@ -53,7 +145,6 @@ if mode == "网页表格填写 (支持粘贴)":
 else:
     col1, col2 = st.columns([2, 3])
     with col1:
-        # --- 创建带样式（标黄、列宽）的模板 ---
         example_data = {
             "证书编号": ["T-2025-001 (示例)"],
             "姓名": ["张三 (示例)"],
@@ -63,22 +154,15 @@ else:
         }
         df_ex = pd.DataFrame(example_data)
         template_buffer = io.BytesIO()
-        
         with pd.ExcelWriter(template_buffer, engine='openpyxl') as writer:
             df_ex.to_excel(writer, index=False, sheet_name='Sheet1')
-            workbook = writer.book
             worksheet = writer.sheets['Sheet1']
-            
-            # 1. 自动调整列宽
             for i, col in enumerate(df_ex.columns):
                 column_letter = get_column_letter(i + 1)
-                # 计算该列最大长度（表头 vs 内容）
                 max_length = max(df_ex[col].astype(str).map(len).max(), len(col)) + 5
                 worksheet.column_dimensions[column_letter].width = max_length
-            
-            # 2. 示例行（第二行，因为第一行是表头）标黄
             yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-            for cell in worksheet[2]: # 指向第二行所有单元格
+            for cell in worksheet[2]:
                 cell.fill = yellow_fill
 
         st.download_button(
@@ -94,10 +178,9 @@ else:
 
     if uploaded_data:
         df = pd.read_csv(uploaded_data, dtype=str).fillna("") if uploaded_data.name.endswith('.csv') else pd.read_excel(uploaded_data, dtype=str).fillna("")
-        # 核心逻辑：自动过滤掉带“示例”字样的行
         data_to_process = [row for row in df.to_dict('records') if "示例" not in str(row.get('姓名', '')) and "示例" not in str(row.get('证书编号', ''))]
         if data_to_process:
-            st.success(f"✅ 已成功加载 {len(data_to_process)} 条有效数据（已自动识别并剔除示例行）")
+            st.success(f"✅ 已成功加载 {len(data_to_process)} 条有效数据")
 
 # --- 第三步：模板确认与生成 ---
 st.markdown("---")
@@ -147,4 +230,3 @@ if template_path and data_to_process:
             st.error(f"制作失败：{e}")
 else:
     st.info("等待录入数据并确认模板...")
-
