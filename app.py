@@ -11,6 +11,36 @@ from openpyxl.utils import get_column_letter
 # 页面配置
 st.set_page_config(page_title="证书智能制作工具", layout="centered")
 
+# --- 样式注入：实现标题居中与平滑过渡过渡 ---
+st.markdown("""
+    <style>
+    /* 1. 标题在所有端强制居中 */
+    .stApp h1 {
+        text-align: center !important;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        width: 100%;
+    }
+    
+    /* 2. 页面切换自然过渡动画 (淡入效果) */
+    .main .block-container {
+        animation: fadeIn 0.5s ease-in-out;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(5px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* 3. 优化移动端间距 */
+    @media (max-width: 640px) {
+        .stApp h1 { font-size: 1.8rem !important; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# 使用统一的标题
 st.title("🎓 内审员证书智能制作工具")
 
 # --- 第一步：选择录入模式 ---
@@ -72,7 +102,6 @@ else:
             # 1. 自动调整列宽
             for i, col in enumerate(df_ex.columns):
                 column_letter = get_column_letter(i + 1)
-                # 计算该列最大长度（表头 vs 内容）
                 max_length = max(df_ex[col].astype(str).map(len).max(), len(col)) + 5
                 worksheet.column_dimensions[column_letter].width = max_length
             
@@ -94,7 +123,6 @@ else:
 
     if uploaded_data:
         df = pd.read_csv(uploaded_data, dtype=str).fillna("") if uploaded_data.name.endswith('.csv') else pd.read_excel(uploaded_data, dtype=str).fillna("")
-        # 核心逻辑：自动过滤掉带“示例”字样的行
         data_to_process = [row for row in df.to_dict('records') if "示例" not in str(row.get('姓名', '')) and "示例" not in str(row.get('证书编号', ''))]
         if data_to_process:
             st.success(f"✅ 已成功加载 {len(data_to_process)} 条有效数据（已自动识别并剔除示例行）")
@@ -147,4 +175,3 @@ if template_path and data_to_process:
             st.error(f"制作失败：{e}")
 else:
     st.info("等待录入数据并确认模板...")
-
