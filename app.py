@@ -147,26 +147,13 @@ if template_path and data_to_process:
             st.error(f"制作失败：{e}")
 else:
     st.info("等待录入数据并确认模板...")
-# --- 底部技术栈与版权信息 (修复版) ---
-st.markdown("---") 
+# --- 底部技术栈与版权信息 (强制 HTML 渲染版) ---
+st.markdown("---")
 
-footer_html = """
-<div style="text-align: center; margin-top: 50px; padding-bottom: 20px;">
-    <div style="display: flex; justify-content: center; align-items: center; gap: 20px; margin-bottom: 10px;">
-        <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/github/github-original.svg" alt="GitHub" width="22" style="opacity: 0.7;">
-        <img src="https://www.vectorlogo.zone/logos/cloudflare/cloudflare-ar21.svg" alt="Cloudflare" width="55" style="opacity: 0.7;">
-        <img src="https://www.vectorlogo.zone/logos/vercel/vercel-ar21.svg" alt="Vercel" width="55" style="opacity: 0.7;">
-        <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/vuejs/vuejs-original.svg" alt="Vue" width="22" style="opacity: 0.7;">
-        <img src="https://www.vectorlogo.zone/logos/tailwindcss/tailwindcss-icon.svg" alt="Tailwind" width="22" style="opacity: 0.7;">
-    </div>
-    
-    <div style="font-size: 13px; color: #666; line-height: 1.6;">
-        <p style="margin: 0;">粤ICP备XXXXXXXX号-1</p>
-        <p style="margin: 0;">© 2026 涂嘉辰. All rights reserved.</p>
-    </div>
-</div>
-"""
+# 定义 HTML 字符串，注意去掉所有不必要的缩进
+footer_html = """<div style="text-align:center;margin-top:50px;padding-bottom:20px;width:100%;"><div style="display:flex;justify-content:center;align-items:center;gap:20px;margin-bottom:15px;"><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/github/github-original.svg" width="22" style="opacity:0.7;"><img src="https://www.vectorlogo.zone/logos/cloudflare/cloudflare-ar21.svg" width="55" style="opacity:0.7;"><img src="https://www.vectorlogo.zone/logos/vercel/vercel-ar21.svg" width="55" style="opacity:0.7;"><img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/vuejs/vuejs-original.svg" width="22" style="opacity:0.7;"><img src="https://www.vectorlogo.zone/logos/tailwindcss/tailwindcss-icon.svg" width="22" style="opacity:0.7;"></div><div style="font-size:13px;color:#666;line-height:1.6;font-family:sans-serif;"><p style="margin:0;">粤ICP备XXXXXXXX号-1</p><p style="margin:0;">© 2026 涂嘉辰. All rights reserved.</p></div></div>"""
 
-# 使用唯一的一个 st.markdown 渲染全部 HTML
+# 核心：这行必须保证 unsafe_allow_html=True
 st.markdown(footer_html, unsafe_allow_html=True)
+
 
