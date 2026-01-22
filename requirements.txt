@@ -2,3 +2,5 @@ streamlit
 pandas
 docxtpl
 openpyxl
+python-docx
+docxcompose
