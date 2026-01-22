@@ -9,39 +9,53 @@ from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 
 # 页面配置
-st.set_page_config(page_title="证书智能制作工具", layout="centered")
+st.set_page_config(page_title="内审员证书智能化工具", layout="centered")
 
-# --- 样式注入：实现标题居中与平滑过渡过渡 ---
+# --- 样式注入：实现标题居中、间距调整与平滑过渡 ---
 st.markdown("""
     <style>
-    /* 1. 标题在所有端强制居中 */
+    /* 1. 标题全端强制居中 & 样式美化 */
     .stApp h1 {
         text-align: center !important;
         display: block;
         margin-left: auto;
         margin-right: auto;
         width: 100%;
+        font-weight: 700;
+        color: #1E1E1E;
+        /* 增加标题下方的间距，确保与第一步之间有足够留白 */
+        margin-bottom: 50px !important; 
+        padding-top: 10px;
     }
     
-    /* 2. 页面切换自然过渡动画 (淡入效果) */
+    /* 2. 页面切换自然过渡动画 */
     .main .block-container {
-        animation: fadeIn 0.5s ease-in-out;
+        animation: fadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
     }
     
     @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(5px); }
+        from { opacity: 0; transform: translateY(8px); }
         to { opacity: 1; transform: translateY(0); }
     }
     
-    /* 3. 优化移动端间距 */
+    /* 3. 移动端适配优化 */
     @media (max-width: 640px) {
-        .stApp h1 { font-size: 1.8rem !important; }
+        .stApp h1 { 
+            font-size: 1.8rem !important;
+            margin-bottom: 35px !important; 
+        }
+    }
+    
+    /* 4. 优化分割线间距 */
+    hr {
+        margin-top: 2.5rem;
+        margin-bottom: 2.5rem;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 使用统一的标题
-st.title("🎓 内审员证书智能制作工具")
+# 更新后的标题名称
+st.title("🎓 内审员证书智能化工具")
 
 # --- 第一步：选择录入模式 ---
 st.markdown("### 第一步：选择录入模式")
@@ -83,7 +97,6 @@ if mode == "网页表格填写 (支持粘贴)":
 else:
     col1, col2 = st.columns([2, 3])
     with col1:
-        # --- 创建带样式（标黄、列宽）的模板 ---
         example_data = {
             "证书编号": ["T-2025-001 (示例)"],
             "姓名": ["张三 (示例)"],
@@ -99,19 +112,17 @@ else:
             workbook = writer.book
             worksheet = writer.sheets['Sheet1']
             
-            # 1. 自动调整列宽
             for i, col in enumerate(df_ex.columns):
                 column_letter = get_column_letter(i + 1)
                 max_length = max(df_ex[col].astype(str).map(len).max(), len(col)) + 5
                 worksheet.column_dimensions[column_letter].width = max_length
             
-            # 2. 示例行（第二行，因为第一行是表头）标黄
             yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-            for cell in worksheet[2]: # 指向第二行所有单元格
+            for cell in worksheet[2]:
                 cell.fill = yellow_fill
 
         st.download_button(
-            label="📥 下载标准模板 (含标黄示例)",
+            label="📥 下载标准上传模板",
             data=template_buffer.getvalue(),
             file_name="学员信息上传模板.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -125,22 +136,22 @@ else:
         df = pd.read_csv(uploaded_data, dtype=str).fillna("") if uploaded_data.name.endswith('.csv') else pd.read_excel(uploaded_data, dtype=str).fillna("")
         data_to_process = [row for row in df.to_dict('records') if "示例" not in str(row.get('姓名', '')) and "示例" not in str(row.get('证书编号', ''))]
         if data_to_process:
-            st.success(f"✅ 已成功加载 {len(data_to_process)} 条有效数据（已自动识别并剔除示例行）")
+            st.success(f"✅ 已加载 {len(data_to_process)} 条有效数据")
 
 # --- 第三步：模板确认与生成 ---
 st.markdown("---")
 st.markdown("### 第三步：模板确认与生成")
 
 if os.path.exists(DEFAULT_TEMPLATE):
-    template_option = st.radio("证书 Word 模板：", ["使用内置模板", "上传本地新模板"], horizontal=True)
-    template_path = DEFAULT_TEMPLATE if template_option == "使用内置模板" else st.file_uploader("请上传自定义 Word 模板", type=["docx"])
+    template_option = st.radio("证书模板选择：", ["使用内置模板", "上传本地新模板"], horizontal=True)
+    template_path = DEFAULT_TEMPLATE if template_option == "使用内置模板" else st.file_uploader("请上传 docx 模板", type=["docx"])
 else:
-    st.warning("⚠️ 仓库未发现默认模板。")
+    st.warning("⚠️ 未发现默认模板。")
     template_path = st.file_uploader("请上传 Word 模板", type=["docx"])
 
 # --- 执行生成 ---
 if template_path and data_to_process:
-    if st.button("🚀 开始批量制作合并文档", use_container_width=True):
+    if st.button("🚀 启动批量制作", use_container_width=True):
         try:
             master_doc, progress_bar, valid_count = None, st.progress(0), 0
             for i, row in enumerate(data_to_process):
@@ -170,8 +181,8 @@ if template_path and data_to_process:
             if master_doc and valid_count > 0:
                 out_io = io.BytesIO(); master_doc.save(out_io); out_io.seek(0)
                 st.balloons()
-                st.download_button(label=f"🎁 制作完成({valid_count}份)！点击下载汇总文档", data=out_io.getvalue(), file_name="证书汇总导出.docx", use_container_width=True)
+                st.download_button(label=f"🎁 下载汇总文档({valid_count}份)", data=out_io.getvalue(), file_name="证书汇总导出.docx", use_container_width=True)
         except Exception as e:
             st.error(f"制作失败：{e}")
 else:
-    st.info("等待录入数据并确认模板...")
+    st.info("准备就绪，请录入数据并确认模板。")
