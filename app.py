@@ -103,4 +103,36 @@ if uploaded_template and uploaded_data:
                     
                     progress_bar.progress((index + 1) / len(df))
 
-                # 4.3 执行单次 PDF
+                # 4.3 执行单次 PDF 转换（大幅提速）
+                st.write("正在执行全员 PDF 转换，请稍候...")
+                temp_word_name = "temp_all_certs.docx"
+                master_doc.save(temp_word_name)
+                
+                # 调用服务器 LibreOffice
+                try:
+                    subprocess.run([
+                        'libreoffice', '--headless', '--convert-to', 'pdf', temp_word_name
+                    ], check=True)
+                    
+                    pdf_name = "temp_all_certs.pdf"
+                    if os.path.exists(pdf_name):
+                        with open(pdf_name, "rb") as f:
+                            zip_file.writestr("【全员汇总】所有证书合并版.pdf", f.read())
+                        os.remove(pdf_name)
+                    
+                    with open(temp_word_name, "rb") as f:
+                        zip_file.writestr("【全员汇总】所有证书合并版.docx", f.read())
+                    os.remove(temp_word_name)
+                except Exception as pdf_err:
+                    st.error(f"PDF 转换失败，原因：{pdf_err}")
+
+            st.balloons()
+            st.download_button(
+                label="🎁 点击下载全部证书结果 (ZIP)",
+                data=zip_buffer.getvalue(),
+                file_name="内审员证书批量制作结果.zip",
+                mime="application/x-zip-compressed"
+            )
+
+    except Exception as e:
+        st.error(f"处理过程中发生错误：{e}")
