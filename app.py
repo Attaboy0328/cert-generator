@@ -149,17 +149,15 @@ if t_path and data_to_process:
     if st.button("🚀 启动批量制作", use_container_width=True):
         try:
             master, bar, count = None, st.progress(0), 0
-            # --- 修复后的生成循环 ---
+            # 遍历数据进行处理
             for i, row in enumerate(data_to_process):
-                # 安全获取姓名，并处理可能的空值
                 name_v = str(row.get('姓名', '')).strip()
                 if not name_v or name_v == 'nan':
                     continue
                 
                 count += 1
                 doc = DocxTemplate(t_path)
-                
-                # 渲染模板变量
+                # 渲染 Word 模板
                 doc.render({
                     'number': str(row.get('证书编号','')).strip(),
                     'name': name_v,
@@ -168,7 +166,6 @@ if t_path and data_to_process:
                     'standards': str(row.get('标准号','')).strip()
                 })
                 
-                # 保存到内存并合并
                 tmp = io.BytesIO()
                 doc.save(tmp)
                 tmp.seek(0)
@@ -183,4 +180,20 @@ if t_path and data_to_process:
                 
                 # 更新进度条
                 bar.progress((i + 1) / len(data_to_process))
-
+            
+            # 循环结束后，检查是否有生成成功的文件
+            if master:
+                out = io.BytesIO()
+                master.save(out)
+                out.seek(0)
+                st.balloons()
+                st.download_button(
+                    label=f"🎁 下载汇总文档({count}份)", 
+                    data=out.getvalue(), 
+                    file_name="证书汇总.docx", 
+                    use_container_width=True
+                )
+        
+        except Exception as e:
+            # 必须包含这个 except 块，否则会报你遇到的那个错误
+            st.error(f"制作过程中发生错误：{e}")
