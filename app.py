@@ -7,82 +7,101 @@ from docx import Document
 from docxcompose.composer import Composer
 
 # 页面配置
-st.set_page_config(page_title="内审员证书批量生成", layout="centered")
+st.set_page_config(page_title="证书智能制作工具", layout="wide")
 
-# 标题
-st.title("🎓 内审员证书一键生成工具")
-st.write("只需三步，快速批量制作合并版证书 Word 文档。")
+st.title("🎓 内审员证书智能制作工具")
 
-# --- 第一步：准备工作 (下载样例) ---
-st.markdown("### 第一步：准备数据")
-col1, col2 = st.columns([1, 1])
-
-with col1:
-    # 动态生成 Excel 样例
-    example_data = {
-        "姓名": ["张三", "李四"],
-        "证书编号": ["T-2025-25-001", "T-2025-25-002"],
-        "身份证号": ["'440683198811060001", "'440683198811060002"],
-        "培训日期": ["2025年9月3-5日", "2025年9月3-5日"],
-        "标准号": ["ISO9001", "ISO22000"]
-    }
-    df_sample = pd.DataFrame(example_data)
-    output_sample = io.BytesIO()
-    with pd.ExcelWriter(output_sample, engine='openpyxl') as writer:
-        df_sample.to_excel(writer, index=False)
-    
-    st.download_button(
-        label="📥 下载 Excel 数据填写样例",
-        data=output_sample.getvalue(),
-        file_name="证书数据样例.xlsx",
-        help="点击下载标准格式表格，填好后再上传。"
-    )
-
-# --- 第二步：选择模板与数据 ---
-st.markdown("---")
-st.markdown("### 第二步：选择模板与上传数据")
+# --- 第一步：模式选择 ---
+st.markdown("### 第一步：选择制作模式")
+mode = st.radio("选择模式：", ["手动填写 (支持从 Excel 复制粘贴)", "Excel 文件上传"], horizontal=True)
 
 DEFAULT_TEMPLATE = "内审员证书.docx"
-uploaded_template = None
+data_to_process = []
 
-# 默认模板逻辑
-if os.path.exists(DEFAULT_TEMPLATE):
-    mode = st.radio("模板选择：", ["使用默认模板", "上传新模板"], horizontal=True)
-    if mode == "使用默认模板":
-        uploaded_template = DEFAULT_TEMPLATE
-        st.success(f"✅ 已加载默认模板: {DEFAULT_TEMPLATE}")
-    else:
-        uploaded_template = st.file_uploader("请上传自定义 Word 模板", type=["docx"])
-else:
-    st.warning("⚠️ 仓库未发现默认模板，请手动上传。")
-    uploaded_template = st.file_uploader("上传证书 Word 模板", type=["docx"])
-
-# 上传 Excel 数据
-uploaded_data = st.file_uploader("请上传填好的学员信息 (Excel/CSV)", type=["xlsx", "csv"])
-
-# --- 第三步：生成与下载 ---
+# --- 第二步：数据准备 ---
 st.markdown("---")
-st.markdown("### 第三步：开始批量制作")
 
-if uploaded_template and uploaded_data:
-    try:
-        # 强制将所有数据读为字符串，彻底规避 'got integer' 报错
+if mode == "手动填写 (支持从 Excel 复制粘贴)":
+    col_input, col_preview = st.columns([1, 1])
+    
+    with col_input:
+        st.markdown("### ✍️ 数据录入")
+        st.info("💡 技巧：您可以直接从 Excel 选中多行多列并复制，然后粘贴到下方。最多支持 100 份。")
+        raw_text = st.text_area(
+            "粘贴区域 (格式：姓名 证书编号 身份证号 培训日期 标准号)", 
+            placeholder="张三\tT-2025-01\t4406...\t2025年9月\tISO9001",
+            height=300
+        )
+        
+        if raw_text:
+            lines = raw_text.strip().split('\n')[:100]
+            for line in lines:
+                # 处理 Excel 的 Tab 分隔符
+                parts = line.split('\t')
+                if len(parts) >= 2:
+                    data_to_process.append({
+                        '姓名': parts[0].strip(),
+                        '证书编号': parts[1].strip() if len(parts) > 1 else "",
+                        '身份证号': parts[2].strip() if len(parts) > 2 else "",
+                        '培训日期': parts[3].strip() if len(parts) > 3 else "",
+                        '标准号': parts[4].strip() if len(parts) > 4 else ""
+                    })
+            
+            if data_to_process:
+                st.success(f"✅ 已识别 {len(data_to_process)} 条数据")
+
+    with col_preview:
+        st.markdown("### 👁️ 实时内容预览 (第一份)")
+        if data_to_process:
+            p = data_to_process[0]
+            # 使用 Markdown 模拟一个简单的证书预览样式
+            st.markdown(f"""
+            <div style="border: 2px solid #555; padding: 20px; border-radius: 10px; background-color: #f9f9f9; color: #333; font-family: sans-serif;">
+                <h4 style="text-align: center; color: #d32f2f;">内审员证书预览</h4>
+                <hr>
+                <p><b>证书编号：</b>{p['证书编号']}</p>
+                <p><b>姓名：</b>{p['姓名']}</p>
+                <p><b>身份证号：</b>{p['身份证号']}</p>
+                <p><b>培训日期：</b>{p['培训日期']}</p>
+                <p><b>标准号：</b><br>{p['标准号']}</p>
+                <hr>
+                <p style="font-size: 0.8em; color: #888;">* 实际生成的排版将严格遵循 Word 模板格式</p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.warning("暂无数据，请在左侧输入或粘贴内容。")
+
+else:
+    st.markdown("### 📂 批量文件上传")
+    uploaded_data = st.file_uploader("上传学员信息 (Excel/CSV)", type=["xlsx", "csv"])
+    if uploaded_data:
         if uploaded_data.name.endswith('.csv'):
             df = pd.read_csv(uploaded_data, dtype=str).fillna("")
         else:
             df = pd.read_excel(uploaded_data, dtype=str).fillna("")
-        
-        st.write(f"📊 已检测到 **{len(df)}** 位学员信息，点击下方按钮开始合并。")
+        data_to_process = df.to_dict('records')
+        st.success(f"✅ 已加载 {len(data_to_process)} 条表格数据")
 
-        if st.button("🚀 生成全员合并版 Word", use_container_width=True):
-            progress_bar = st.progress(0)
+# --- 第三步：一键生成 ---
+st.markdown("---")
+st.markdown("### 第三步：生成与下载")
+
+# 检查默认模板
+if os.path.exists(DEFAULT_TEMPLATE):
+    template_path = DEFAULT_TEMPLATE
+    st.caption(f"📍 当前使用默认模板: {DEFAULT_TEMPLATE}")
+else:
+    template_path = st.file_uploader("⚠️ 未发现默认模板，请手动上传 Word 模板", type=["docx"])
+
+if template_path and data_to_process:
+    if st.button("🚀 开始批量制作合并文档", use_container_width=True):
+        try:
             master_doc = None
+            progress_bar = st.progress(0)
             
-            for index, row in df.iterrows():
-                # 渲染每一份证书
-                doc = DocxTemplate(uploaded_template)
-                
-                # context 中的 key 必须对应 Word 里的 {{变量名}}
+            for i, row in enumerate(data_to_process):
+                # 填充
+                doc = DocxTemplate(template_path)
                 context = {
                     'number': str(row.get('证书编号', '')),
                     'name': str(row.get('姓名', '')),
@@ -90,8 +109,6 @@ if uploaded_template and uploaded_data:
                     'date': str(row.get('培训日期', '')),
                     'standards': str(row.get('标准号', ''))
                 }
-                
-                # 渲染
                 doc.render(context)
                 
                 # 存入内存
@@ -105,28 +122,25 @@ if uploaded_template and uploaded_data:
                     master_doc = current_doc
                     composer = Composer(master_doc)
                 else:
-                    master_doc.add_page_break() # 分页
+                    master_doc.add_page_break()
                     composer.append(current_doc)
                 
-                progress_bar.progress((index + 1) / len(df))
+                progress_bar.progress((i + 1) / len(data_to_process))
 
-            # 导出下载
-            if master_doc:
-                output_io = io.BytesIO()
-                master_doc.save(output_io)
-                output_io.seek(0)
-                
-                st.balloons()
-                st.download_button(
-                    label="🎉 制作完成！点击下载结果文档",
-                    data=output_io.getvalue(),
-                    file_name="全员内审员证书汇总.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True
-                )
-                
-    except Exception as e:
-        st.error(f"❌ 运行出错：{e}")
-        st.info("💡 温馨提示：请检查 Excel 表头是否完全对应：姓名、证书编号、身份证号、培训日期、标准号")
+            # 下载
+            output_io = io.BytesIO()
+            master_doc.save(output_io)
+            output_io.seek(0)
+            
+            st.balloons()
+            st.download_button(
+                label="🎁 点击下载汇总文档 (.docx)",
+                data=output_io.getvalue(),
+                file_name="内审员证书汇总导出.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True
+            )
+        except Exception as e:
+            st.error(f"制作失败：{e}")
 else:
-    st.info("请先上传数据文件以启用生成按钮。")
+    st.info("待处理数据为空，请先完成录入或上传。")
