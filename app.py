@@ -149,5 +149,38 @@ if t_path and data_to_process:
     if st.button("🚀 启动批量制作", use_container_width=True):
         try:
             master, bar, count = None, st.progress(0), 0
+            # --- 修复后的生成循环 ---
             for i, row in enumerate(data_to_process):
-                name_v = str(row.get
+                # 安全获取姓名，并处理可能的空值
+                name_v = str(row.get('姓名', '')).strip()
+                if not name_v or name_v == 'nan':
+                    continue
+                
+                count += 1
+                doc = DocxTemplate(t_path)
+                
+                # 渲染模板变量
+                doc.render({
+                    'number': str(row.get('证书编号','')).strip(),
+                    'name': name_v,
+                    'id_card': str(row.get('身份证号','')).strip(),
+                    'date': str(row.get('培训日期','')).strip(),
+                    'standards': str(row.get('标准号','')).strip()
+                })
+                
+                # 保存到内存并合并
+                tmp = io.BytesIO()
+                doc.save(tmp)
+                tmp.seek(0)
+                cur = Document(tmp)
+                
+                if master is None:
+                    master = cur
+                    composer = Composer(master)
+                else:
+                    master.add_page_break()
+                    composer.append(cur)
+                
+                # 更新进度条
+                bar.progress((i + 1) / len(data_to_process))
+
