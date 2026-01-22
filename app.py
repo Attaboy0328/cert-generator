@@ -30,7 +30,6 @@ st.markdown("### 第二步：填写或上传信息")
 if mode == "网页表格填写 (支持粘贴)":
     st.info("💡 提示：点击左上角第一个单元格（证书编号下方）并按下 Ctrl+V 即可粘贴 Excel 数据。")
     
-    # 创建 100 行初始数据，并设置序号从 1 开始
     init_df = pd.DataFrame(
         {
             "序号": [i for i in range(1, 101)],
@@ -42,7 +41,6 @@ if mode == "网页表格填写 (支持粘贴)":
         }
     )
     
-    # 使用数据编辑器，高度锁定为显示前9行
     edited_df = st.data_editor(
         init_df,
         num_rows="fixed", 
@@ -59,7 +57,6 @@ if mode == "网页表格填写 (支持粘贴)":
         }
     )
     
-    # 提取有效数据
     temp_df = edited_df.drop(columns=["序号"])
     data_to_process = temp_df.dropna(how='all').to_dict('records')
     data_to_process = [
@@ -68,33 +65,47 @@ if mode == "网页表格填写 (支持粘贴)":
     ]
 
 else:
-    # --- 新增：下载学员信息模板功能 ---
+    # --- 第三步优化：带案例的模板下载 ---
     col1, col2 = st.columns([2, 3])
     with col1:
-        # 创建一个标准的 Excel 模板流
-        template_df = pd.DataFrame(columns=["证书编号", "姓名", "身份证号", "培训日期", "标准号"])
+        # 创建带案例的示例数据
+        example_data = {
+            "证书编号": ["T-2025-001 (示例)"],
+            "姓名": ["张三 (示例)"],
+            "身份证号": ["440683199001010001"],
+            "培训日期": ["2025年9月3-5日"],
+            "标准号": ["ISO9001:2015、ISO22000:2018"]
+        }
+        template_df = pd.DataFrame(example_data)
         template_buffer = io.BytesIO()
         with pd.ExcelWriter(template_buffer, engine='openpyxl') as writer:
             template_df.to_excel(writer, index=False)
         
         st.download_button(
-            label="📥 下载学员信息 Excel 模板",
+            label="📥 下载带案例的 Excel 模板",
             data=template_buffer.getvalue(),
-            file_name="学员信息上传模板.xlsx",
+            file_name="学员信息上传模板(含案例).xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            help="下载后按表头填写数据，再通过下方框上传。"
         )
     
     with col2:
-        uploaded_data = st.file_uploader("上传已填好的学员信息文件", type=["xlsx", "csv"], label_visibility="collapsed")
+        uploaded_data = st.file_uploader("上传学员信息文件", type=["xlsx", "csv"], label_visibility="collapsed")
 
     if uploaded_data:
         if uploaded_data.name.endswith('.csv'):
             df = pd.read_csv(uploaded_data, dtype=str).fillna("")
         else:
             df = pd.read_excel(uploaded_data, dtype=str).fillna("")
-        data_to_process = df.to_dict('records')
-        st.success(f"✅ 已成功加载 {len(data_to_process)} 条数据")
+        
+        # 核心逻辑：自动过滤掉带“(示例)”字样的行
+        full_data = df.to_dict('records')
+        data_to_process = [
+            row for row in full_data 
+            if "(示例)" not in str(row.get('姓名', '')) and "(示例)" not in str(row.get('证书编号', ''))
+        ]
+        
+        if len(data_to_process) > 0:
+            st.success(f"✅ 已成功加载 {len(data_to_process)} 条有效数据 (已自动排除示例行)")
 
 # --- 第三步：模板确认与生成 ---
 st.markdown("---")
@@ -119,9 +130,9 @@ if template_path and data_to_process:
             
             valid_count = 0
             for i, row in enumerate(data_to_process):
-                # 至少要有姓名才处理
+                # 清洗数据
                 name_val = str(row.get('姓名', '')).replace('nan', '').strip()
-                if not name_val:
+                if not name_val or name_val == "":
                     continue
                 
                 valid_count += 1
@@ -162,14 +173,7 @@ if template_path and data_to_process:
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     use_container_width=True
                 )
-            else:
-                st.warning("未检测到有效数据，请检查表格内容。")
         except Exception as e:
-            error_msg = str(e)
-            if "expected token" in error_msg:
-                st.error("❌ 制作失败：检测到 Word 模板语法错误。")
-                st.info("💡 提醒：模板里只能写英文变量名，如 {{ name }}，不能直接写具体名字或数字。")
-            else:
-                st.error(f"❌ 制作失败：{error_msg}")
+            st.error(f"制作失败：{e}")
 else:
     st.info("等待录入数据并确认模板...")
