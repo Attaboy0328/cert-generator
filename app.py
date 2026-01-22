@@ -10,7 +10,71 @@ from openpyxl.utils import get_column_letter
 
 # 页面配置
 st.set_page_config(page_title="证书智能制作工具", layout="centered")
+# --- 1. 深度界面定制：隐藏官方按钮 + 注入自定义 Logo ---
+def customize_interface():
+    # 注入 CSS 隐藏右侧 Share, 收藏按钮以及右下角内容
+    st.markdown("""
+        <style>
+        /* 隐藏右上角 Share 按钮 */
+        div[data-testid="stStatusWidget"] {
+            display: none !important;
+        }
+        /* 隐藏右上角收藏/更多按钮 (仅隐藏特定的 Share 和 Star，保留菜单) */
+        #MainMenu {visibility: visible;} 
+        
+        /* 隐藏右下角 "Made with Streamlit" 和相关内容 */
+        footer {visibility: hidden !important;}
+        header {visibility: visible !important;}
+        
+        /* 隐藏右上角 Share 按钮的具体样式 (兼容不同版本) */
+        .st-emotion-cache-15ec60u, .st-emotion-cache-zq59db {
+            display: none !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
+    # 注入 JavaScript 在 GitHub 图标左侧插入自定义 Logo 链接
+    st.components.v1.html("""
+        <script>
+        const targetUrl = "https://share.streamlit.io/user/attaboy0328";
+        const logoSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#FF4B4B" style="margin-right:15px; cursor:pointer;"><path d="M12 2L2 19.72L12 22L22 19.72L12 2ZM12 16.5L6.5 15.5L12 6L17.5 15.5L12 16.5Z"/></svg>`;
+        
+        function injectLogo() {
+            // 定位右上角的按钮容器
+            const header = window.parent.document.querySelector('header[data-testid="stHeader"]');
+            const container = header ? header.querySelector('div:nth-child(2)') : null;
+            
+            if (container && !window.parent.document.getElementById('custom-streamlit-logo')) {
+                const link = window.parent.document.createElement('a');
+                link.id = 'custom-streamlit-logo';
+                link.href = targetUrl;
+                link.target = "_blank";
+                link.innerHTML = logoSvg;
+                link.style.display = "flex";
+                link.style.alignItems = "center";
+                
+                // 插入到容器的最前面（通常在 GitHub 图标左侧）
+                container.prepend(link);
+            }
+        }
+        
+        // 轮询检查 DOM 是否加载完成
+        const checkInterval = setInterval(() => {
+            injectLogo();
+            if (window.parent.document.getElementById('custom-streamlit-logo')) {
+                clearInterval(checkInterval);
+            }
+        }, 500);
+        </script>
+    """, height=0)
+
+# 页面配置
+st.set_page_config(page_title="证书智能制作工具", layout="centered")
+
+# 调用定制函数
+customize_interface()
+
+# ... 后续业务逻辑代码保持不变 ...
 st.title("🎓 内审员证书智能制作工具")
 
 # --- 第一步：选择录入模式 ---
@@ -147,4 +211,5 @@ if template_path and data_to_process:
             st.error(f"制作失败：{e}")
 else:
     st.info("等待录入数据并确认模板...")
+
 
