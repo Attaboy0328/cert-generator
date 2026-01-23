@@ -8,6 +8,18 @@ from docxcompose.composer import Composer
 from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 
+# --- 新增：身份证脱敏逻辑函数 ---
+def mask_id_card(id_str):
+    """
+    针对18位身份证号脱敏中间8位（生日部分）
+    非18位（如港澳台证件）保持原样
+    """
+    id_str = str(id_str).strip()
+    if len(id_str) == 18:
+        # 截取前6位 + 8个* + 后4位
+        return f"{id_str[:6]}********{id_str[14:]}"
+    return id_str
+
 # 页面配置
 st.set_page_config(page_title="证书智能制作工具", layout="centered")
 
@@ -53,7 +65,6 @@ if mode == "网页表格填写 (支持粘贴)":
 else:
     col1, col2 = st.columns([2, 3])
     with col1:
-        # --- 创建带样式（标黄、列宽）的模板 ---
         example_data = {
             "证书编号": ["T-2025-001 (示例)"],
             "姓名": ["张三 (示例)"],
@@ -69,16 +80,13 @@ else:
             workbook = writer.book
             worksheet = writer.sheets['Sheet1']
             
-            # 1. 自动调整列宽
             for i, col in enumerate(df_ex.columns):
                 column_letter = get_column_letter(i + 1)
-                # 计算该列最大长度（表头 vs 内容）
                 max_length = max(df_ex[col].astype(str).map(len).max(), len(col)) + 5
                 worksheet.column_dimensions[column_letter].width = max_length
             
-            # 2. 示例行（第二行，因为第一行是表头）标黄
             yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-            for cell in worksheet[2]: # 指向第二行所有单元格
+            for cell in worksheet[2]:
                 cell.fill = yellow_fill
 
         st.download_button(
@@ -94,10 +102,9 @@ else:
 
     if uploaded_data:
         df = pd.read_csv(uploaded_data, dtype=str).fillna("") if uploaded_data.name.endswith('.csv') else pd.read_excel(uploaded_data, dtype=str).fillna("")
-        # 核心逻辑：自动过滤掉带“示例”字样的行
         data_to_process = [row for row in df.to_dict('records') if "示例" not in str(row.get('姓名', '')) and "示例" not in str(row.get('证书编号', ''))]
         if data_to_process:
-            st.success(f"✅ 已成功加载 {len(data_to_process)} 条有效数据（已自动识别并剔除示例行）")
+            st.success(f"✅ 已成功加载 {len(data_to_process)} 条有效数据")
 
 # --- 第三步：模板确认与生成 ---
 st.markdown("---")
@@ -121,10 +128,16 @@ if template_path and data_to_process:
                 
                 valid_count += 1
                 doc = DocxTemplate(template_path)
+                
+                # 获取原始身份证号
+                raw_id_card = str(row.get('身份证号', '')).replace('nan', '').strip()
+                # --- 调用脱敏函数 ---
+                processed_id_card = mask_id_card(raw_id_card)
+
                 doc.render({
                     'number': str(row.get('证书编号', '')).replace('nan', '').strip(),
                     'name': name_val,
-                    'id_card': str(row.get('身份证号', '')).replace('nan', '').strip(),
+                    'id_card': processed_id_card, # 渲染处理后的号码
                     'date': str(row.get('培训日期', '')).replace('nan', '').strip(),
                     'standards': str(row.get('标准号', '')).replace('nan', '').strip()
                 })
@@ -147,4 +160,3 @@ if template_path and data_to_process:
             st.error(f"制作失败：{e}")
 else:
     st.info("等待录入数据并确认模板...")
-
